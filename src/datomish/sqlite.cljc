@@ -81,7 +81,8 @@
 
 (defn all-rows
   [db [sql & bindings :as rest]]
-  (reduce-rows db rest [] conj))
+  (go-pair
+    (persistent! (<? (reduce-rows db rest (transient []) conj!)))))
 
 (defn in-transaction! [db chan-fn]
   (go
