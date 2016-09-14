@@ -21,6 +21,7 @@
                 :compiler
                 {
                  :elide-asserts  true
+                 :externs        ["src/node/externs.js"]
                  :hashbang       false
                  :language-in    :ecmascript5
                  :language-out   :ecmascript5
@@ -68,6 +69,7 @@
                {:source-paths ["src/node" "src/common"]
                 :compiler
                 {
+                 :externs        ["src/node/externs.js"]
                  :language-in    :ecmascript5
                  :language-out   :ecmascript5
                  :output-dir     "target/advanced"
