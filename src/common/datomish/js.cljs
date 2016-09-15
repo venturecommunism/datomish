@@ -18,14 +18,15 @@
      [datomish.js-sqlite :as js-sqlite]
      [datomish.transact :as transact]))
 
-(defn- take-pair-as-promise! [ch]
+(defn- take-pair-as-promise! [ch f]
   ;; Just like take-as-promise!, but aware that it's handling a pair channel.
+  ;; Also converts values, if desired.
   (promise
     (fn [resolve reject]
       (letfn [(split-pair [[v e]]
                 (if e
                   (reject e)
-                  (resolve v)))]
+                  (resolve (f v))))]
         (cljs.core.async/take! ch split-pair)))))
 
 ;; Public API.
@@ -37,30 +38,37 @@
   (let [find (cljs.reader/read-string find)
         options (js->clj options)]
     (take-pair-as-promise!
-      (db/<?q db find options))))
+      (db/<?q db find options)
+      clj->js)))
 
 (defn ^:export ensure-schema [conn simple-schema]
-  (let [simple-schema (js->clj simple-schema)]
-    (println "simple-schema: " (pr-str simple-schema))
+  (let [simple-schema (js->clj simple-schema :keywordize-keys true)]
     (take-pair-as-promise!
       (transact/<transact!
         conn
-        (simple-schema/simple-schema->schema simple-schema)))))
+        (simple-schema/simple-schema->schema simple-schema))
+      clj->js)))
 
 (defn js->tx-data [tx-data]
   ;; Objects to maps.
   ;; Arrays to arrays.
   ;; RHS strings… well, some of them will be richer types.
   ;; TODO
-  (println "Converting" (pr-str tx-data) "to" (pr-str (js->clj tx-data :keywordize-keys true)))
-  (println "Converting" (pr-str tx-data) "to" (pr-str (js->clj tx-data :keywordize-keys true)))
-  (js->clj tx-data))
+  (js->clj tx-data :keywordize-keys true))
 
 (defn ^:export transact [conn tx-data]
   ;; Expects a JS array as input.
   (let [tx-data (js->tx-data tx-data)]
     (take-pair-as-promise!
-      (transact/<transact! conn tx-data))))
+      (go-pair
+        (let [tx-result (<? (transact/<transact! conn tx-data))]
+          (select-keys tx-result
+                       [:tempids
+                        :added-idents
+                        :added-attributes
+                        :tx
+                        :txInstant])))
+      clj->js)))
 
 (defn ^:export open [path]
   ;; Eventually, URI.  For now, just a plain path (no file://).
@@ -76,4 +84,5 @@
            :q (fn [find options] (q (transact/db c) find options))
            :close (fn [] (db/close-db db))
            :toString (fn [] (str "#<DB " path ">"))
-           :path path}))))))
+           :path path}))))
+    identity))
